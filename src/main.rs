@@ -7,10 +7,21 @@ use tokio::io::AsyncWriteExt;
 use tokio::task;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use futures_util::{StreamExt, SinkExt};
+use cpal::traits::{DeviceTrait, HostTrait};
+
+// Initialize Audio
+
 
 //use url::Url;
 #[tokio::main]
 async fn main() {
+     // Get the default audio host
+     let host = cpal::default_host();
+
+     // Get the default input and output devices
+     let output_device = host.default_output_device().expect("No output device available");
+     println!("Output Device: {:?}", output_device.name().unwrap());
+
     let mut input = String::new();
     print!("Please enter your Roblox username!: ");
     std::io::stdout().flush().unwrap();
