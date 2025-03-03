@@ -6,13 +6,17 @@ use anyhow::{Context, Error};
 
 pub async fn audio_loop(mut rx: Receiver<String>, sink: Sink) -> Result<(), Error> {
     let client = Client::new();
+    let default_volume = sink.volume();
     loop {
         let input = rx.recv().await
             .context("Audio channel closed")?;
         match input.as_str() {
-            "died" => sink.set_volume(0.5),
+            "died" => sink.set_volume(default_volume / 2.0),
             "left" => sink.stop(),
-            _ => play_audio(input, &client, &sink).await?,
+            _ => {
+                sink.set_volume(default_volume);
+                play_audio(input, &client, &sink).await?}
+            ,
         }
     }
 }
