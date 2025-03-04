@@ -4,17 +4,24 @@ use reqwest::Client;
 use rodio::{Decoder, Sink};
 use anyhow::{Context, Error};
 
-pub async fn audio_loop(mut rx: Receiver<String>, sink: Sink) -> Result<(), Error> {
+pub async fn audio_loop(mut rx: Receiver<String>, mut volume_rx: Receiver<f32>, sink: Sink) -> Result<(), Error> {
     let client = Client::new();
-    let default_volume = sink.volume();
+    let mut volume = sink.volume();
     loop {
         let input = rx.recv().await
             .context("Audio channel closed")?;
         match input.as_str() {
-            "died" => sink.set_volume(default_volume / 2.0),
+            "volume" => { // internal event
+                let received_volume = volume_rx.recv().await // this shouldn't stall the audio loop since volume_rx should already have a message by the time volume is received
+                    .context("Received volume from keybind listener was not of type f32")?; // this shouldnt ever happen
+                sink.set_volume(received_volume);
+                volume = received_volume;
+                println!("Volume set to {}", volume * 100.0);
+            },
+            "died" => sink.set_volume(volume / 2.0),
             "left" => sink.stop(),
             _ => {
-                sink.set_volume(default_volume);
+                sink.set_volume(volume);
                 play_audio(input, &client, &sink).await?;
             },
         }
