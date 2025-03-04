@@ -15,14 +15,14 @@ pub async fn audio_loop(mut rx: Receiver<String>, sink: Sink) -> Result<(), Erro
             "left" => sink.stop(),
             _ => {
                 sink.set_volume(default_volume);
-                play_audio(input, &client, &sink).await?}
-            ,
+                play_audio(input, &client, &sink).await?;
+            },
         }
     }
 }
 
 pub async fn play_audio(url: String, client: &Client, sink: &Sink) -> Result<(), Error> {
-    println!("\nGot request to play audio {}", url);
+    println!("Got request to play audio {}", url);
     // Stop the current playback, if any
     sink.stop();
 
