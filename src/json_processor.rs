@@ -11,7 +11,7 @@ struct MessageFormat {
     audio_url: Option<String>,
 }
 
-pub async fn process_data(data: &str, tx: Sender<String>) -> Result<(), Error> {
+pub async fn process_data(data: &str, tx: &Sender<String>) -> Result<(), Error> {
     let p_data: MessageFormat = match serde_json::from_str(data) {
         Ok(parsed_data) => parsed_data,
         Err(err) => {
@@ -28,14 +28,14 @@ pub async fn process_data(data: &str, tx: Sender<String>) -> Result<(), Error> {
     Ok(())
 }
 
-async fn get_audio(p_data: MessageFormat, tx: Sender<String>) -> Result<(), Error> {
+async fn get_audio(p_data: MessageFormat, tx: &Sender<String>) -> Result<(), Error> {
     let audio_url = p_data.audio_url
         .context("msgType was bgm but no URL was provided")?;
     tx.send(audio_url).await?;
     Ok(())
 }
 
-async fn get_status(p_data: MessageFormat, tx: Sender<String>) -> Result<(), Error> {
+async fn get_status(p_data: MessageFormat, tx: &Sender<String>) -> Result<(), Error> {
     let status_type = p_data.status_type
         .context("msgType was gameStatus but no status was provided")?;
     tx.send(status_type).await?;
