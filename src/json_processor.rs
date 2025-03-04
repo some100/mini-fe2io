@@ -35,7 +35,7 @@ async fn get_audio(p_data: MessageFormat, tx: &Sender<String>) -> Result<(), Err
     Ok(())
 }
 
-async fn get_status(p_data: MessageFormat, tx:& Sender<String>) -> Result<(), Error> {
+async fn get_status(p_data: MessageFormat, tx: &Sender<String>) -> Result<(), Error> {
     let status_type = p_data.status_type
         .context("msgType was gameStatus but no status was provided")?;
     tx.send(status_type).await?;
