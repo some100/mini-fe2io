@@ -6,6 +6,13 @@ HUGE thanks to [@some100](https://github.com/some100) for reworking the entire c
 
 # Building from Source
 
+## Debian / Ubuntu: Install additional dependencies
+
+```shell
+sudo apt update
+sudo apt install libasound2-dev libx11-dev
+```
+
 ## Install Rust Toolchain
 https://www.rust-lang.org/learn/get-started
 
@@ -28,7 +35,7 @@ cargo run
 
 # To-Do
 These are several things I would like to do to make this more usable.
-- Keybindings to Mute / Unmute, and to Increase / Decrease Volume
+- Ability to switch audio device when default is disconnected / switched
 - Some CLI that shows the status, and volume
 
 This page is a Work in Progress!
