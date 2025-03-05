@@ -24,11 +24,23 @@ cd mini-fe2io
 ```
 
 ## Build with Cargo
+### Release builds
+```shell
+cargo build --release
+```
+
+### Debug builds
 ```shell
 cargo build
 ```
 
 ## Run with Cargo
+### Release builds
+```shell
+cargo run --release
+```
+
+### Debug builds
 ```shell
 cargo run
 ```

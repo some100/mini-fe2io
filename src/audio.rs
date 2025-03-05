@@ -58,7 +58,8 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
 }
 
 fn update_audio_status(volume: f32, status: &str) -> Result<(), Error> {
-    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+    #[cfg(not(debug_assertions))] // Only clear screen in case debug is disabled
+    print!("{esc}[2J{esc}[1;1H", esc = 27 as char); // clear screen in release builds
     println!("Status: {}", status);
     println!("Volume: {}", volume * 100.0);
     Ok(())
