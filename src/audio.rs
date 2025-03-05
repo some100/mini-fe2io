@@ -1,4 +1,4 @@
-use std::io::{Cursor, stdout, Write};
+use std::io::Cursor;
 use tokio::sync::mpsc::Receiver;
 use reqwest::Client;
 use rodio::{Decoder, Sink};
