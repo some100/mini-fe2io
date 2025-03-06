@@ -16,20 +16,20 @@ pub async fn audio_loop(mut rx: Receiver<String>, mut volume_rx: Receiver<f32>, 
                     .context("Received volume from keybind listener was not of type f32")?; // this shouldnt ever happen
                 sink.set_volume(received_volume);
                 volume = received_volume;
-                update_audio_status(volume, "Changed volume")?;
+                update_audio_status(volume, "Changed volume");
             },
             "died" => {
                 sink.set_volume(volume / 2.0);
-                update_audio_status(volume / 2.0, "Player died, setting volume to 0")?;
+                update_audio_status(volume / 2.0, &format!("Player died, setting volume to {}", volume * 100.0 / 2.0));
             },
             "left" => { 
                 sink.stop();
-                update_audio_status(volume, "Player left the game, stopping audio output")?;
+                update_audio_status(volume, "Player left the game, stopping audio output");
             },
             _ => {
                 sink.set_volume(volume);
                 play_audio(&input, &client, &sink).await?;
-                update_audio_status(volume, &format!("Currently playing URL {}", input))?;
+                update_audio_status(volume, &format!("Currently playing URL {}", input));
             },
         }
     }
@@ -57,10 +57,9 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
     Ok(())
 }
 
-fn update_audio_status(volume: f32, status: &str) -> Result<(), Error> {
+fn update_audio_status(volume: f32, status: &str) {
     #[cfg(not(debug_assertions))] // Only clear screen in case debug is disabled
     print!("{esc}[2J{esc}[1;1H", esc = 27 as char); // clear screen in release builds
     println!("Status: {}", status);
     println!("Volume: {}", volume * 100.0);
-    Ok(())
 }

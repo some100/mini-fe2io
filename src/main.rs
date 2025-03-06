@@ -33,6 +33,9 @@ struct Args {
     /// Volume
     #[arg(short = 'v', long = "volume", default_value_t = 70.0)]
     volume: f32,
+    /// Server
+    #[arg(short = 's', long = "server", default_value = "ws://client.fe2.io:8081")]
+    server: String,
 }
 
 #[tokio::main]
@@ -55,7 +58,7 @@ async fn main() -> Result<(), Error> {
     let volume = args.volume.clamp(0.0, 100.0) / 100.0; // clamp volume between 0% and 100%
 
     // Create a connection to the server
-    let read = websocket_connect(username).await?;
+    let read = websocket_connect(args.server, username).await?;
 
     // Create an mpsc channel for communication between the JSON processor and the audio loop
     let (tx, rx) = channel(32);
@@ -75,9 +78,9 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-async fn websocket_connect(username: String) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
+async fn websocket_connect(server: String, username: String) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
     // this does a reasonable amount of work for websocket connect
-    let (ws_stream, _response) = connect_async("ws://client.fe2.io:8081").await?;
+    let (ws_stream, _response) = connect_async(server).await?;
     println!("Connection established");
 
     let (mut write, read) = ws_stream.split();
