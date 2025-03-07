@@ -48,6 +48,7 @@ cargo run
 # To-Do
 These are several things I would like to do to make this more usable.
 - Ability to switch audio device when default is disconnected / switched
-- Some CLI that shows the status, and volume
+- Audio Caching (Temp File)
+- Timer to sync music when downloading
 
 This page is a Work in Progress!
