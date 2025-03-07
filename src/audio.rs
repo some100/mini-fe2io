@@ -1,7 +1,10 @@
 use anyhow::{Context, Error, bail};
 use reqwest::Client;
 use rodio::{Decoder, Sink, Source};
-use std::{io::Cursor, path::Path};
+use std::{
+    io::Cursor, 
+    path::Path,
+};
 use tokio::{
     fs::{File, create_dir_all},
     io::{AsyncReadExt, AsyncWriteExt},
@@ -64,19 +67,21 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
     let cache = format!("{home}/fe2io-cache"); // get fe2io-cache as a string
     create_dir_all(cache.clone()).await?; // if fe2io-cache doesn't exist, create it
 
-    let file_as_str = format!("{cache}/{url}"); // get file location as a string
+    let filtered_url = url.replace(&['/','<','>',':','\"','\\','|','?','*'][..], ""); // replace all "unprintable characters," specifically / < > : " \ | ? * with nothing
+    let file_as_str = format!("{cache}/{filtered_url}"); // get file location as a string
     let file = Path::new(&file_as_str); // get file location as a Path
+
     let start = Instant::now(); // Get the Instant before downloading or reading the audio
 
     let audio = if let Ok(false) = file.try_exists() {
         // checks if file does not exist
         // Get response from URL
         let response = client.get(url).send().await?.bytes().await?.to_vec(); // convert to vec so that the arms are the same types
-
+        
         println!("Got response");
 
         // Create a file inside of fe2io-cache, then write the content of Response to it
-        let mut f = File::create(file).await?;
+        let mut f = File::create(&file).await?;
         f.write_all(&response).await?;
 
         // Wrap the response in a Cursor to implement Seek and Read
@@ -93,9 +98,9 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
         bail!("Unable to verify if fe2io-cache dir in home directory exists");
     };
     // Play the downloaded audio
-    let decoder = Decoder::new(audio)?;
-    let elapsed = Instant::now().duration_since(start);
-    sink.append(decoder.skip_duration(elapsed));
+    let decoder = Decoder::new(audio)?; 
+    let elapsed = Instant::now().duration_since(start); // Get the Instant after downloading the audio, then convert it to a Duration representing the time since before the audio was downloaded
+    sink.append(decoder.skip_duration(elapsed)); // Append decoder to sink and skip the elapsed Duration
     println!("Playback started");
     Ok(())
 }
