@@ -15,7 +15,7 @@ pub async fn process_data(data: &str, tx: &Sender<String>) -> Result<(), Error> 
     let p_data: MessageFormat = match serde_json::from_str(data) {
         Ok(parsed_data) => parsed_data,
         Err(err) => {
-            eprintln!("Error parsing JSON: {}", err);
+            eprintln!("Error parsing JSON: {err}");
             return Err(err.into()); // Exit early on error
         }
     };

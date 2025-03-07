@@ -1,11 +1,16 @@
-use tokio::{
-    time::{sleep, Duration},
-    sync::mpsc::Sender,
-};
-use device_query::{DeviceQuery, DeviceState, Keycode};
 use anyhow::Error;
+use device_query::{DeviceQuery, DeviceState, Keycode};
+use tokio::{
+    sync::mpsc::Sender,
+    time::{Duration, sleep},
+};
 
-pub async fn keybind_listen(tx: Sender<String>, volume_tx: Sender<f32>, mut volume: f32) -> Result<(), Error> { // MASSIVE function
+pub async fn keybind_listen(
+    tx: Sender<String>,
+    volume_tx: Sender<f32>,
+    mut volume: f32,
+) -> Result<(), Error> {
+    // MASSIVE function
     let device_state = DeviceState::new();
     let mut initial_volume = volume;
     let mut muted = false;
@@ -17,14 +22,15 @@ pub async fn keybind_listen(tx: Sender<String>, volume_tx: Sender<f32>, mut volu
                 volume_tx.send(volume).await?; // Increase volume
                 tx.send("volume".to_owned()).await?; // Send volume event to audio loop
                 muted = false;
-            },
+            }
             keys if keys.contains(&Keycode::Minus) => {
                 volume = (((volume * 100.0) - 5.0).max(0.0).round()) / 100.0;
                 volume_tx.send(volume).await?; // Lower volume
                 tx.send("volume".to_owned()).await?;
                 muted = false;
-            },
-            keys if keys.contains(&Keycode::Grave) => { // this key `
+            }
+            keys if keys.contains(&Keycode::Grave) => {
+                // this key `
                 if muted {
                     volume = initial_volume;
                     volume_tx.send(volume).await?; // Unmute (sets volume to value before muted)
@@ -37,7 +43,7 @@ pub async fn keybind_listen(tx: Sender<String>, volume_tx: Sender<f32>, mut volu
                     tx.send("volume".to_owned()).await?;
                     muted = true;
                 }
-            },
+            }
             _ => (),
         }
         sleep(Duration::from_millis(100)).await; // sleep for 100 ms to avoid maxing out the cpu
