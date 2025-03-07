@@ -16,19 +16,26 @@ pub async fn audio_loop(mut rx: Receiver<String>, mut volume_rx: Receiver<f32>, 
                     .context("Received volume from keybind listener was not of type f32")?; // this shouldnt ever happen
                 sink.set_volume(received_volume);
                 volume = received_volume;
-                println!("Volume set to {}", volume * 100.0);
+                update_audio_status(volume, "Changed volume");
             },
-            "died" => sink.set_volume(volume / 2.0),
-            "left" => sink.stop(),
+            "died" => {
+                sink.set_volume(volume / 2.0);
+                update_audio_status(volume / 2.0, &format!("Player died, setting volume to {}", volume * 100.0 / 2.0));
+            },
+            "left" => { 
+                sink.stop();
+                update_audio_status(volume, "Player left the game, stopping audio output");
+            },
             _ => {
                 sink.set_volume(volume);
-                play_audio(input, &client, &sink).await?;
+                play_audio(&input, &client, &sink).await?;
+                update_audio_status(volume, &format!("Currently playing URL {}", input));
             },
         }
     }
 }
 
-pub async fn play_audio(url: String, client: &Client, sink: &Sink) -> Result<(), Error> {
+async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error> {
     println!("Got request to play audio {}", url);
     // Stop the current playback, if any
     sink.stop();
@@ -48,4 +55,11 @@ pub async fn play_audio(url: String, client: &Client, sink: &Sink) -> Result<(),
     sink.append(decoder);
     println!("Playback started");
     Ok(())
+}
+
+fn update_audio_status(volume: f32, status: &str) {
+    #[cfg(not(debug_assertions))] // Only clear screen in case debug is disabled
+    print!("{esc}[2J{esc}[1;1H", esc = 27 as char); // clear screen in release builds
+    println!("Status: {}", status);
+    println!("Volume: {}", volume * 100.0);
 }
