@@ -98,7 +98,7 @@ async fn websocket_loop(tx: Sender<String>, mut read: SplitStream<WebSocketStrea
             .await
             .context("Couldn't receive messages from server")?;
         let data = message?.into_text()?;
-        println!("Got message {}", data);
+        println!("Got message {data}");
         json_processor::process_data(&data, &tx).await?;
     }
 }
