@@ -17,3 +17,4 @@ anyhow = "1.0.96"
 clap = {version = "4.5.31", features = ["derive"]}
 device_query = "3.0.0"
 dirs = "6.0.0"
+random-string = "1.1.0"

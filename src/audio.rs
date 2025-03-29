@@ -1,16 +1,27 @@
-use anyhow::{Context, Error, bail};
+use anyhow::{Context, Error};
 use reqwest::Client;
 use rodio::{Decoder, Sink, Source};
+use serde_json::{json, Value};
 use std::{
     io::Cursor, 
-    path::Path,
+    path::PathBuf,
 };
 use tokio::{
-    fs::{File, create_dir_all},
-    io::{AsyncReadExt, AsyncWriteExt},
+    fs::{self, create_dir_all, File},
+    io::AsyncWriteExt,
     sync::mpsc::Receiver,
     time::Instant,
 };
+use serde::{Serialize, Deserialize};
+use random_string::generate;
+
+const CHARSET: &str = "abcdefghijklmnopqrstuvwxyz1234567890";
+
+#[derive(Serialize, Deserialize)]
+struct AudioCache {
+    urls: Vec<String>,
+    files: Vec<String>,
+}
 
 pub async fn audio_loop(
     mut rx: Receiver<String>,
@@ -57,23 +68,41 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
     // Stop the current playback, if any
     sink.stop();
 
-    // Get the user's home directory, and create the fe2io-cache directory
-    let home = dirs::home_dir() // get home dir
-        .context("No home directory was found")? // unwrap Option from home dir
-        .to_str() // convert returned PathBuf to str
-        .context("Home directory that was returned wasn't a string")? // unwrap Option from str
-        .to_owned(); // convert str to owned String
+    create_dir_all("fe2io-cache").await?; // if fe2io-cache doesn't exist, create it
+    let cache_file = fs::read("fe2io-cache/cache.json").await?;
+    let mut cache: AudioCache;
+    if cache_file.is_empty() {
+        let json: Value = json!({
+            "urls": [],
+            "files": [],
+        });
+        cache = serde_json::from_value(json)?;
+    } else {
+        cache = serde_json::from_slice(&cache_file)?;
+    }
 
-    let cache = format!("{home}/fe2io-cache"); // get fe2io-cache as a string
-    create_dir_all(cache.clone()).await?; // if fe2io-cache doesn't exist, create it
+    let filename = generate(32, CHARSET); // Generate a 32 char long random file name
+    let file_as_str = format!("fe2io-cache/{filename}"); // Generate a 32 char long random file name for the file
+    let mut file = PathBuf::new();
+    file.set_file_name(file_as_str);
 
-    let filtered_url = url.replace(&['/','<','>',':','\"','\\','|','?','*'][..], ""); // replace all "unprintable characters," specifically / < > : " \ | ? * with nothing
-    let file_as_str = format!("{cache}/{filtered_url}"); // get file location as a string
-    let file = Path::new(&file_as_str); // get file location as a Path
+    let mut file_exists = false;
+    for (i, cache_url) in cache.urls.iter().enumerate() {
+        if cache_url == url {
+            let file_as_str = &cache.files[i];
+            file.set_file_name(file_as_str);
+            file_exists = true;
+            break;
+        }
+    }
 
     let start = Instant::now(); // Get the Instant before downloading or reading the audio
 
-    let audio = if let Ok(false) = file.try_exists() {
+    let audio = if file_exists {
+        // checks if file does exist and is readable
+        let buf = fs::read(&file).await?;
+        Cursor::new(buf)
+    } else {
         // checks if file does not exist
         // Get response from URL
         let response = client.get(url).send().await?.bytes().await?.to_vec(); // convert to vec so that the arms are the same types
@@ -84,18 +113,13 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
         let mut f = File::create(&file).await?;
         f.write_all(&response).await?;
 
+        cache.urls.push(url.to_owned());
+        cache.files.push(filename);
+
+        let mut cache_file = fs::OpenOptions::new().write(true).truncate(true).open("fe2io-cache/cache.json").await?;
+        cache_file.write_all(serde_json::to_string(&cache)?.as_bytes()).await?;
         // Wrap the response in a Cursor to implement Seek and Read
         Cursor::new(response)
-    } else if let Ok(true) = file.try_exists() {
-        // checks if file does exist and is readable
-        let mut f = File::open(file).await?;
-        let mut buf = Vec::new();
-
-        f.read_to_end(&mut buf).await?;
-        Cursor::new(buf)
-    } else {
-        // this is probably because there are no permissions to read from home directory
-        bail!("Unable to verify if fe2io-cache dir in home directory exists");
     };
     // Play the downloaded audio
     let decoder = Decoder::new(audio)?; 

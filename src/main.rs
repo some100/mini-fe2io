@@ -10,10 +10,11 @@ use futures_util::{
     stream::SplitStream,
 };
 use rodio::{OutputStream, Sink};
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use tokio::{
-    sync::mpsc::{Sender, channel},
-    net::TcpStream,
+    fs::{self, File}, 
+    net::TcpStream, 
+    sync::mpsc::{channel, Sender}, 
     task,
 };
 use tokio_tungstenite::{
@@ -68,6 +69,15 @@ async fn main() -> Result<(), Error> {
     let (_stream, stream_handle) = OutputStream::try_default()?;
     let sink = Sink::try_new(&stream_handle)?;
     sink.set_volume(volume);
+
+    match fs::create_dir("fe2io-cache").await {
+        Err(e) if e.kind() == ErrorKind::AlreadyExists => (),
+        Err(e) => return Err(e.into()),
+        _ => (),
+    }
+    if !fs::try_exists("fe2io-cache/cache.json").await? {
+        File::create("fe2io-cache/cache.json").await?;
+    }
 
     // Spawn separate task for handling audio events
     task::spawn(audio::audio_loop(rx, volume_rx, sink));
