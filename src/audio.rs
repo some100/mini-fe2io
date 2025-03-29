@@ -1,8 +1,8 @@
 use anyhow::{Context, Error};
 use reqwest::Client;
 use rodio::{Decoder, Sink, Source};
-use serde_json::{json, Value};
 use std::{
+    collections::HashMap,
     io::Cursor, 
     path::PathBuf,
 };
@@ -19,8 +19,7 @@ const CHARSET: &str = "abcdefghijklmnopqrstuvwxyz1234567890";
 
 #[derive(Serialize, Deserialize)]
 struct AudioCache {
-    urls: Vec<String>,
-    files: Vec<String>,
+    files: HashMap<String, String>,
 }
 
 pub async fn audio_loop(
@@ -71,29 +70,24 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
     let cache_file = fs::read("fe2io-cache/cache.json").await?;
     let mut cache: AudioCache;
     if cache_file.is_empty() {
-        let json: Value = json!({
-            "urls": [],
-            "files": [],
-        });
-        cache = serde_json::from_value(json)?;
+        cache = AudioCache {
+            files: HashMap::new(),
+        }
     } else {
         cache = serde_json::from_slice(&cache_file)?;
     }
 
-    let filename = generate(32, CHARSET);
-    let file_as_str = format!("fe2io-cache/{filename}");
     let mut file = PathBuf::new();
-    file.set_file_name(file_as_str);
 
-    let mut file_exists = false;
-    for (i, cache_url) in cache.urls.iter().enumerate() {
-        if cache_url == url {
-            let file_as_str = &cache.files[i];
-            file.set_file_name(file_as_str);
-            file_exists = true;
-            break;
-        }
-    }
+    let mut file_exists = true;
+    let filename = match cache.files.get(url) {
+        Some(filename) => filename.to_owned(), // hashmap get returns &String, so convert it to an owned value so the variable can use it,
+        None => {
+            file_exists = false;
+            generate(32, CHARSET)
+        },
+    };
+    file.set_file_name(format!("fe2io-cache/{filename}"));
 
     let start = Instant::now(); // Get the Instant before downloading or reading the audio
 
@@ -109,8 +103,10 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
         let mut f = File::create(&file).await?;
         f.write_all(&response).await?;
 
-        cache.urls.push(url.to_owned());
-        cache.files.push(filename);
+        cache.files.insert(
+            url.to_owned(),
+            filename,
+        );
 
         let mut cache_file = fs::OpenOptions::new().write(true).truncate(true).open("fe2io-cache/cache.json").await?;
         cache_file.write_all(serde_json::to_string(&cache)?.as_bytes()).await?;
