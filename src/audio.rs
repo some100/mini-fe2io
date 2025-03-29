@@ -7,7 +7,7 @@ use std::{
     path::PathBuf,
 };
 use tokio::{
-    fs::{self, create_dir_all, File},
+    fs::{self, File},
     io::AsyncWriteExt,
     sync::mpsc::Receiver,
     time::Instant,
@@ -65,10 +65,9 @@ pub async fn audio_loop(
 
 async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error> {
     println!("Got request to play audio {url}");
-    // Stop the current playback, if any
+
     sink.stop();
 
-    create_dir_all("fe2io-cache").await?; // if fe2io-cache doesn't exist, create it
     let cache_file = fs::read("fe2io-cache/cache.json").await?;
     let mut cache: AudioCache;
     if cache_file.is_empty() {
@@ -81,8 +80,8 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
         cache = serde_json::from_slice(&cache_file)?;
     }
 
-    let filename = generate(32, CHARSET); // Generate a 32 char long random file name
-    let file_as_str = format!("fe2io-cache/{filename}"); // Generate a 32 char long random file name for the file
+    let filename = generate(32, CHARSET);
+    let file_as_str = format!("fe2io-cache/{filename}");
     let mut file = PathBuf::new();
     file.set_file_name(file_as_str);
 
@@ -99,17 +98,14 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
     let start = Instant::now(); // Get the Instant before downloading or reading the audio
 
     let audio = if file_exists {
-        // checks if file does exist and is readable
         let buf = fs::read(&file).await?;
         Cursor::new(buf)
     } else {
-        // checks if file does not exist
         // Get response from URL
         let response = client.get(url).send().await?.bytes().await?.to_vec(); // convert to vec so that the arms are the same types
         
         println!("Got response");
 
-        // Create a file inside of fe2io-cache, then write the content of Response to it
         let mut f = File::create(&file).await?;
         f.write_all(&response).await?;
 
@@ -118,7 +114,7 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
 
         let mut cache_file = fs::OpenOptions::new().write(true).truncate(true).open("fe2io-cache/cache.json").await?;
         cache_file.write_all(serde_json::to_string(&cache)?.as_bytes()).await?;
-        // Wrap the response in a Cursor to implement Seek and Read
+        // Wrap the response in a Cursor to implement Seek and Read 
         Cursor::new(response)
     };
     // Play the downloaded audio
