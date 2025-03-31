@@ -18,13 +18,13 @@ pub async fn keybind_listen(
         let keys: Vec<Keycode> = device_state.get_keys();
         match keys {
             keys if keys.contains(&Keycode::Equal) => {
-                volume = (((volume * 100.0) + 5.0).min(100.0).round()) / 100.0;
+                volume = volume.mul_add(100.0, 5.0).min(100.0).round() / 100.0;
                 volume_tx.send(volume).await?; // Increase volume
                 tx.send("volume".to_owned()).await?; // Send volume event to audio loop
                 muted = false;
             }
             keys if keys.contains(&Keycode::Minus) => {
-                volume = (((volume * 100.0) - 5.0).max(0.0).round()) / 100.0;
+                volume = volume.mul_add(100.0, -5.0).max(0.0).round() / 100.0;
                 volume_tx.send(volume).await?; // Lower volume
                 tx.send("volume".to_owned()).await?;
                 muted = false;

@@ -1,27 +1,20 @@
 mod audio;
-mod keybind;
 mod json_processor;
+mod keybind;
 
 use anyhow::{Context, Error};
 use clap::Parser;
-use futures_util::{
-    SinkExt, 
-    StreamExt,
-    stream::SplitStream,
-};
+use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use rodio::{OutputStream, Sink};
 use std::io::{ErrorKind, Write};
 use tokio::{
-    fs::{self, File}, 
-    net::TcpStream, 
-    sync::mpsc::{channel, Sender}, 
+    fs::{self, File},
+    net::TcpStream,
+    sync::mpsc::{Sender, channel},
     task,
 };
 use tokio_tungstenite::{
-    connect_async, 
-    MaybeTlsStream,
-    WebSocketStream,
-    tungstenite::protocol::Message,
+    MaybeTlsStream, WebSocketStream, connect_async, tungstenite::protocol::Message,
 };
 
 /// A miniaturized version of FE2.IO written in Rust, and independent of any web browsers.
@@ -35,7 +28,11 @@ struct Args {
     #[arg(short = 'v', long = "volume", default_value_t = 70.0)]
     volume: f32,
     /// Server
-    #[arg(short = 's', long = "server", default_value = "ws://client.fe2.io:8081")]
+    #[arg(
+        short = 's',
+        long = "server",
+        default_value = "ws://client.fe2.io:8081"
+    )]
     server: String,
 }
 
@@ -88,7 +85,10 @@ async fn main() -> Result<(), Error> {
     Ok(())
 }
 
-async fn websocket_connect(server: String, username: String) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
+async fn websocket_connect(
+    server: String,
+    username: String,
+) -> Result<SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>, Error> {
     // this does a reasonable amount of work for websocket connect
     let (ws_stream, _response) = connect_async(server).await?;
     println!("Connection established");
@@ -101,7 +101,10 @@ async fn websocket_connect(server: String, username: String) -> Result<SplitStre
     Ok(read)
 }
 
-async fn websocket_loop(tx: Sender<String>, mut read: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>) -> Result<(), Error> {
+async fn websocket_loop(
+    tx: Sender<String>,
+    mut read: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+) -> Result<(), Error> {
     loop {
         let message = read
             .next()

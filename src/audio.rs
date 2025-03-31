@@ -1,19 +1,15 @@
 use anyhow::{Context, Error};
+use random_string::generate;
 use reqwest::Client;
 use rodio::{Decoder, Sink, Source};
-use std::{
-    collections::HashMap,
-    io::Cursor, 
-    path::PathBuf,
-};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, io::Cursor, path::PathBuf};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
     sync::mpsc::Receiver,
     time::Instant,
 };
-use serde::{Serialize, Deserialize};
-use random_string::generate;
 
 const CHARSET: &str = "abcdefghijklmnopqrstuvwxyz1234567890";
 
@@ -68,14 +64,12 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
     sink.stop();
 
     let cache_file = fs::read("fe2io-cache/cache.json").await?;
-    let mut cache: AudioCache;
-    if cache_file.is_empty() {
-        cache = AudioCache {
+    let mut cache: AudioCache = match serde_json::from_slice(&cache_file) {
+        Ok(cache) => cache,
+        Err(_) => AudioCache {
             files: HashMap::new(),
-        }
-    } else {
-        cache = serde_json::from_slice(&cache_file)?;
-    }
+        },
+    };
 
     let mut file = PathBuf::new();
 
@@ -85,7 +79,7 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
         None => {
             file_exists = false;
             generate(32, CHARSET)
-        },
+        }
     };
     file.set_file_name(format!("fe2io-cache/{filename}"));
 
@@ -97,24 +91,27 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
     } else {
         // Get response from URL
         let response = client.get(url).send().await?.bytes().await?.to_vec(); // convert to vec so that the arms are the same types
-        
+
         println!("Got response");
 
         let mut f = File::create(&file).await?;
         f.write_all(&response).await?;
 
-        cache.files.insert(
-            url.to_owned(),
-            filename,
-        );
+        cache.files.insert(url.to_owned(), filename);
 
-        let mut cache_file = fs::OpenOptions::new().write(true).truncate(true).open("fe2io-cache/cache.json").await?;
-        cache_file.write_all(serde_json::to_string(&cache)?.as_bytes()).await?;
-        // Wrap the response in a Cursor to implement Seek and Read 
+        let mut cache_file = fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open("fe2io-cache/cache.json")
+            .await?;
+        cache_file
+            .write_all(serde_json::to_string(&cache)?.as_bytes())
+            .await?;
+        // Wrap the response in a Cursor to implement Seek and Read
         Cursor::new(response)
     };
     // Play the downloaded audio
-    let decoder = Decoder::new(audio)?; 
+    let decoder = Decoder::new(audio)?;
     let elapsed = Instant::now().duration_since(start); // Get the Instant after downloading the audio, then convert it to a Duration representing the time since before the audio was downloaded
     sink.append(decoder.skip_duration(elapsed)); // Append decoder to sink and skip the elapsed Duration
     println!("Playback started");
