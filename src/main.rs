@@ -68,12 +68,12 @@ async fn main() -> Result<(), Error> {
     sink.set_volume(volume);
 
     match fs::create_dir("fe2io-cache").await {
-        Err(e) if e.kind() == ErrorKind::AlreadyExists => (),
-        Err(e) => return Err(e.into()),
-        _ => (),
-    }
-    if !fs::try_exists("fe2io-cache/cache.json").await? {
-        File::create("fe2io-cache/cache.json").await?;
+        Err(e) if e.kind() != ErrorKind::AlreadyExists => eprintln!("Error: {e}"), // skip creating cache if its not able to be created
+        _ => {
+            if !fs::try_exists("fe2io-cache/cache.json").await? {
+                File::create("fe2io-cache/cache.json").await?;
+            }
+        }
     }
 
     // Spawn separate task for handling audio events

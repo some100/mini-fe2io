@@ -18,6 +18,51 @@ struct AudioCache {
     files: HashMap<String, String>,
 }
 
+impl AudioCache {
+    async fn new() -> Result<Self, Error> {
+        let Ok(cache_file) = fs::read("fe2io-cache/cache.json").await else {
+            eprintln!("Could not read from cache, using default");
+            return Ok(AudioCache {
+                files: HashMap::new(),
+            }); // return a default in case its unreadable
+        };
+
+        Ok(match serde_json::from_slice(&cache_file) {
+            Ok(cache) => cache,
+            Err(_) => AudioCache {
+                files: HashMap::new(),
+            },
+        })
+    }
+    fn get_filename(&self, url: &str) -> (bool, String) {
+        let mut file_exists = true;
+        let filename = match self.files.get(url) {
+            Some(filename) => filename.to_owned(), // hashmap get returns &String, so convert it to an owned value so the variable can use it,
+            None => {
+                file_exists = false;
+                generate(32, CHARSET)
+            }
+        };
+        (file_exists, filename)
+    }
+    async fn write(&mut self, url: &str, filename: String) -> Result<(), Error> {
+        let Ok(mut cache_file) = fs::OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .open("fe2io-cache/cache.json")
+            .await
+        else {
+            eprintln!("Error: Attempted to write to cache but permission denied");
+            return Ok(()); // this is not fatal, just keep going
+        };
+        self.files.insert(url.to_owned(), filename);
+        cache_file
+            .write_all(serde_json::to_string(&self)?.as_bytes())
+            .await?;
+        Ok(())
+    }
+}
+
 pub async fn audio_loop(
     mut rx: Receiver<String>,
     mut volume_rx: Receiver<f32>,
@@ -63,24 +108,11 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
 
     sink.stop();
 
-    let cache_file = fs::read("fe2io-cache/cache.json").await?;
-    let mut cache: AudioCache = match serde_json::from_slice(&cache_file) {
-        Ok(cache) => cache,
-        Err(_) => AudioCache {
-            files: HashMap::new(),
-        },
-    };
+    let mut cache = AudioCache::new().await?;
 
     let mut file = PathBuf::new();
 
-    let mut file_exists = true;
-    let filename = match cache.files.get(url) {
-        Some(filename) => filename.to_owned(), // hashmap get returns &String, so convert it to an owned value so the variable can use it,
-        None => {
-            file_exists = false;
-            generate(32, CHARSET)
-        }
-    };
+    let (file_exists, filename) = cache.get_filename(url);
     file.set_file_name(format!("fe2io-cache/{filename}"));
 
     let start = Instant::now(); // Get the Instant before downloading or reading the audio
@@ -94,19 +126,12 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
 
         println!("Got response");
 
-        let mut f = File::create(&file).await?;
-        f.write_all(&response).await?;
+        match File::create(&file).await {
+            Err(e) => eprintln!("Error: {e}"),
+            Ok(mut f) => f.write_all(&response).await?,
+        };
 
-        cache.files.insert(url.to_owned(), filename);
-
-        let mut cache_file = fs::OpenOptions::new()
-            .write(true)
-            .truncate(true)
-            .open("fe2io-cache/cache.json")
-            .await?;
-        cache_file
-            .write_all(serde_json::to_string(&cache)?.as_bytes())
-            .await?;
+        cache.write(url, filename).await?;
         // Wrap the response in a Cursor to implement Seek and Read
         Cursor::new(response)
     };
