@@ -3,12 +3,16 @@ use random_string::generate;
 use reqwest::Client;
 use rodio::{Decoder, Sink, Source};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, io::Cursor, path::PathBuf};
+use std::{
+    collections::HashMap, 
+    io::{Cursor, ErrorKind}, 
+    path::PathBuf,
+};
 use tokio::{
     fs::{self, File},
     io::AsyncWriteExt,
     sync::mpsc::Receiver,
-    time::Instant,
+    time::{sleep, Duration, Instant},
 };
 
 const CHARSET: &str = "abcdefghijklmnopqrstuvwxyz1234567890";
@@ -20,6 +24,14 @@ struct AudioCache {
 
 impl AudioCache {
     async fn new() -> Result<Self, Error> {
+        match fs::create_dir_all("fe2io-cache").await {
+            Err(e) if e.kind() != ErrorKind::AlreadyExists => eprintln!("Error: {e}"), // skip creating cache if its not able to be created
+            _ => {
+                if !fs::try_exists("fe2io-cache/cache.json").await? {
+                    File::create("fe2io-cache/cache.json").await?;
+                }
+            }
+        }
         let Ok(cache_file) = fs::read("fe2io-cache/cache.json").await else {
             eprintln!("Could not read from cache, using default");
             return Ok(AudioCache {
@@ -70,6 +82,7 @@ pub async fn audio_loop(
 ) -> Result<(), Error> {
     let client = Client::new();
     let mut volume = sink.volume();
+    let mut cache = AudioCache::new().await?;
     loop {
         let input = rx.recv().await.context("Audio channel closed")?;
         match input.as_str() {
@@ -94,21 +107,19 @@ pub async fn audio_loop(
                 sink.stop();
                 update_audio_status(volume, "Player left the game, stopping audio output");
             }
-            _ => {
+            input => {
                 sink.set_volume(volume);
-                play_audio(&input, &client, &sink).await?;
+                play_audio(input, &client, &mut cache, &sink).await?;
                 update_audio_status(volume, &format!("Currently playing URL {input}"));
             }
         }
     }
 }
 
-async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error> {
+async fn play_audio(url: &str, client: &Client, cache: &mut AudioCache, sink: &Sink) -> Result<(), Error> {
     println!("Got request to play audio {url}");
 
     sink.stop();
-
-    let mut cache = AudioCache::new().await?;
 
     let mut file = PathBuf::new();
 
@@ -132,13 +143,14 @@ async fn play_audio(url: &str, client: &Client, sink: &Sink) -> Result<(), Error
         };
 
         cache.write(url, filename).await?;
-        // Wrap the response in a Cursor to implement Seek and Read
+        
         Cursor::new(response)
     };
     // Play the downloaded audio
     let decoder = Decoder::new(audio)?;
-    let elapsed = Instant::now().duration_since(start); // Get the Instant after downloading the audio, then convert it to a Duration representing the time since before the audio was downloaded
-    sink.append(decoder.skip_duration(elapsed)); // Append decoder to sink and skip the elapsed Duration
+    let elapsed = Instant::now().duration_since(start); // get elapsed duration from before downloading
+    sleep(Duration::from_millis(500)).await; // sleep for 500 ms to sync with current maps
+    sink.append(decoder.skip_duration(elapsed));
     println!("Playback started");
     Ok(())
 }

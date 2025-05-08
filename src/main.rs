@@ -6,9 +6,8 @@ use anyhow::{Context, Error};
 use clap::Parser;
 use futures_util::{SinkExt, StreamExt, stream::SplitStream};
 use rodio::{OutputStream, Sink};
-use std::io::{ErrorKind, Write};
+use std::io::{self, Write};
 use tokio::{
-    fs::{self, File},
     net::TcpStream,
     sync::mpsc::{Sender, channel},
     task,
@@ -42,14 +41,16 @@ async fn main() -> Result<(), Error> {
     let args = Args::parse();
 
     // Check for username
-    let username = if let Some(user) = args.username {
-        user
-    } else {
-        let mut input = String::new();
-        print!("Please enter your Roblox username: ");
-        std::io::stdout().flush()?;
-        std::io::stdin().read_line(&mut input)?;
-        input.trim().to_string()
+    #[allow(clippy::single_match_else, reason = "this looks more natural than the equivalent if let")]
+    let username = match args.username {
+        Some(username) => username,
+        None => {
+            let mut input = String::new();
+            print!("Please enter your roblox username: ");
+            io::stdout().flush()?;
+            io::stdin().read_line(&mut input)?;
+            input.trim().to_owned()
+        }
     };
 
     // Check for volume
@@ -66,15 +67,6 @@ async fn main() -> Result<(), Error> {
     let (_stream, stream_handle) = OutputStream::try_default()?;
     let sink = Sink::try_new(&stream_handle)?;
     sink.set_volume(volume);
-
-    match fs::create_dir("fe2io-cache").await {
-        Err(e) if e.kind() != ErrorKind::AlreadyExists => eprintln!("Error: {e}"), // skip creating cache if its not able to be created
-        _ => {
-            if !fs::try_exists("fe2io-cache/cache.json").await? {
-                File::create("fe2io-cache/cache.json").await?;
-            }
-        }
-    }
 
     // Spawn separate task for handling audio events
     task::spawn(audio::audio_loop(rx, volume_rx, sink));
